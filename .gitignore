@@ -1,0 +1,18 @@
+# Ambiente virtual
+.venv/
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Dados e modelos (muito grandes para o GitHub)
+data/
+models/
+catboost_info/
+
+# Credenciais
+.env
+
+# VS Code
+.vscode/
