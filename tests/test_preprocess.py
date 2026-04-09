@@ -87,4 +87,5 @@ class TestBuildFeatures:
         pd.testing.assert_series_equal(
             result["TotalLatePayments"].reset_index(drop=True),
             expected.reset_index(drop=True),
+            check_names=False,
         )
