@@ -84,4 +84,7 @@ class TestBuildFeatures:
             + result["NumberOfTime60-89DaysPastDueNotWorse"]
             + result["NumberOfTimes90DaysLate"]
         )
-        pd.testing.assert_series_equal(result["TotalLatePayments"], expected)
+        pd.testing.assert_series_equal(
+            result["TotalLatePayments"].reset_index(drop=True),
+            expected.reset_index(drop=True),
+        )
