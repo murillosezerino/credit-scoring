@@ -121,6 +121,56 @@ python main.py
 uvicorn src.api:app --reload
 ```
 
+#### Endpoints
+
+**GET /health** — Status da API
+```bash
+curl http://localhost:8000/health
+# {"status":"healthy","model_loaded":true}
+```
+
+**POST /predict** — Predição de risco
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "RevolvingUtilizationOfUnsecuredLines": 0.02,
+    "age": 45,
+    "NumberOfTime30_59DaysPastDueNotWorse": 0,
+    "DebtRatio": 0.3,
+    "MonthlyIncome": 12000,
+    "NumberOfOpenCreditLinesAndLoans": 5,
+    "NumberOfTimes90DaysLate": 0,
+    "NumberRealEstateLoansOrLines": 1,
+    "NumberOfTime60_89DaysPastDueNotWorse": 0,
+    "NumberOfDependents": 2
+  }'
+```
+
+**Resposta:**
+```json
+{
+  "default_probability": 0.0523,
+  "risk_score": 947,
+  "risk_label": "Baixo Risco",
+  "recommendation": "Aprovado"
+}
+```
+
+| Probabilidade | Risk Label | Recomendação |
+|---|---|---|
+| < 0.10 | Baixo Risco | Aprovado |
+| 0.10 - 0.30 | Médio Risco | Aprovado com restrições |
+| 0.30 - 0.50 | Alto Risco | Análise manual recomendada |
+| > 0.50 | Crítico | Reprovado |
+
+### Testes
+
+```bash
+pytest tests/ -v
+# 17 testes: limpeza, feature engineering, cálculo de risco
+```
+
 ## Resultados
 
 | Metrica | Valor |
