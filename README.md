@@ -1,185 +1,83 @@
 # Credit Scoring — Stacking Ensemble
 
-![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python)
-![XGBoost](https://img.shields.io/badge/XGBoost-2.0-blue)
-![LightGBM](https://img.shields.io/badge/LightGBM-4.0-green)
-![CatBoost](https://img.shields.io/badge/CatBoost-1.2-yellow)
-![SHAP](https://img.shields.io/badge/SHAP-0.44-purple)
+> Technical study: default prediction model using a Stacking Ensemble of gradient boosting algorithms, served through a FastAPI endpoint.
 
-Modelo de **credit scoring** para previsao de inadimplencia utilizando **Stacking Ensemble** com interpretabilidade via **SHAP**. AUC-ROC de **~0.80** em 150.000+ registros.
+A focused exercise in applied machine learning for credit risk — a domain familiar from prior experience at PagBank, Porto Vale Consórcios and CooperJohnson. The project explores ensemble methods (XGBoost + LightGBM + CatBoost + Random Forest) with a Logistic Regression meta-learner, on a public Kaggle dataset.
 
-## Arquitetura do Pipeline
+## What this project explores
 
-```
-Dataset (Kaggle: Give Me Some Credit)
-    │
-    ▼
-[1] Preprocessamento (preprocess.py)
-    ├── Limpeza (duplicatas, outliers, imputacao)
-    ├── Feature Engineering (3 features derivadas)
-    └── Balanceamento (SMOTE no treino)
-    │
-    ▼
-[2] Treinamento (train.py)
-    ├── Base Learners:
-    │   ├── XGBoost (300 estimators, depth 6)
-    │   ├── LightGBM (300 estimators, depth 6)
-    │   ├── CatBoost (300 iterations, depth 6)
-    │   └── Random Forest (200 estimators, depth 8)
-    └── Meta-Learner: Logistic Regression (CV=5)
-    │
-    ▼
-[3] Avaliacao (evaluate.py)
-    ├── Metricas: AUC-ROC, AUC-PR, Classification Report
-    ├── ROC Curve (salva em models/roc_curve.png)
-    └── SHAP Summary (salva em models/shap_summary.png)
-```
+- **Stacking Ensemble** combining four gradient boosting / tree-based base learners
+- **Class imbalance handling** with SMOTE
+- **Feature engineering** for credit-specific signals (TotalLatePayments, CreditUtilizationRisk)
+- **Model explainability** with SHAP values
+- **REST API delivery** via FastAPI for inference
 
-## Features
+## Stack
 
-### Features Originais (dataset)
+`Python` · `XGBoost` · `LightGBM` · `CatBoost` · `Scikit-Learn` · `SHAP` · `FastAPI` · `pytest`
 
-| Feature | Descricao |
+## Results on the working dataset
+
+| Metric | Value |
 |---|---|
-| RevolvingUtilizationOfUnsecuredLines | Utilizacao de credito rotativo |
-| age | Idade do tomador |
-| NumberOfTime30-59DaysPastDueNotWorse | Atrasos de 30-59 dias |
-| DebtRatio | Razao divida/renda |
-| MonthlyIncome | Renda mensal |
-| NumberOfOpenCreditLinesAndLoans | Linhas de credito abertas |
-| NumberOfTimes90DaysLate | Atrasos de 90+ dias |
-| NumberRealEstateLoansOrLines | Emprestimos imobiliarios |
-| NumberOfTime60-89DaysPastDueNotWorse | Atrasos de 60-89 dias |
-| NumberOfDependents | Numero de dependentes |
+| AUC-ROC | ~0.80 |
+| Records | 150,000 (Kaggle) |
+| Base learners | 4 (XGB, LGBM, CatBoost, RF) |
+| Meta-learner | Logistic Regression |
 
-### Features Engenheiradas
+Numbers refer to the Kaggle dataset used during the study; production results will differ depending on the data distribution and target definition.
 
-| Feature | Formula |
-|---|---|
-| TotalLatePayments | Soma de todos os atrasos (30-59 + 60-89 + 90+) |
-| IncomePerDependent | Renda / (Dependentes + 1) |
-| CreditUtilizationRisk | Utilizacao rotativo x DebtRatio |
-
-## Estrutura do Projeto
+## Architecture
 
 ```
-├── main.py              # Orquestrador do pipeline
+raw data → preprocessing → SMOTE → feature engineering
+                                         ↓
+                              base learners (XGB, LGBM, CatBoost, RF)
+                                         ↓
+                                 meta-learner (LogReg)
+                                         ↓
+                              SHAP explanations + FastAPI
+```
+
+## What's inside
+
+```
+credit-scoring/
 ├── src/
-│   ├── preprocess.py    # Limpeza, features e SMOTE
-│   ├── train.py         # Stacking Ensemble
-│   ├── evaluate.py      # Metricas e SHAP
-│   └── api.py           # API REST (FastAPI)
-├── tests/               # Testes unitarios
-├── models/              # Modelo e artefatos salvos
-├── data/                # Dataset (nao versionado)
-├── requirements.txt
-└── .github/workflows/
-    └── ci.yml           # CI/CD automatizado
+│   ├── preprocessing/    # Data cleaning, SMOTE, splits
+│   ├── features/         # Feature engineering
+│   ├── models/           # Base + meta learners
+│   ├── explain/          # SHAP analysis
+│   └── api/              # FastAPI inference endpoint
+├── tests/
+└── main.py
 ```
 
-## Como Rodar
-
-### Pre-requisitos
-
-- Python 3.11+
-
-### Setup
+## How to run
 
 ```bash
-# Clonar o repositorio
-git clone https://github.com/murillosezerino/credit-scoring.git
-cd credit-scoring
-
-# Criar ambiente virtual
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
-
-# Instalar dependencias
 pip install -r requirements.txt
+python main.py train          # Train the stack
+python main.py serve          # Run FastAPI on :8000
 ```
 
-### Dataset
+Inference example:
 
-Baixe o dataset **"Give Me Some Credit"** do Kaggle e coloque em `data/cs-training.csv`:
-
-```
-https://www.kaggle.com/c/GiveMeSomeCredit/data
-```
-
-### Executar o Pipeline
-
-```bash
-# Rodar pipeline completo (preprocess -> train -> evaluate)
-python main.py
-```
-
-### API REST
-
-```bash
-# Servir modelo via FastAPI
-uvicorn src.api:app --reload
-```
-
-#### Endpoints
-
-**GET /health** — Status da API
-```bash
-curl http://localhost:8000/health
-# {"status":"healthy","model_loaded":true}
-```
-
-**POST /predict** — Predição de risco
 ```bash
 curl -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
-  -d '{
-    "RevolvingUtilizationOfUnsecuredLines": 0.02,
-    "age": 45,
-    "NumberOfTime30_59DaysPastDueNotWorse": 0,
-    "DebtRatio": 0.3,
-    "MonthlyIncome": 12000,
-    "NumberOfOpenCreditLinesAndLoans": 5,
-    "NumberOfTimes90DaysLate": 0,
-    "NumberRealEstateLoansOrLines": 1,
-    "NumberOfTime60_89DaysPastDueNotWorse": 0,
-    "NumberOfDependents": 2
-  }'
+  -d '{"income": 5000, "age": 35, "credit_utilization": 0.4, ...}'
 ```
 
-**Resposta:**
-```json
-{
-  "default_probability": 0.0523,
-  "risk_score": 947,
-  "risk_label": "Baixo Risco",
-  "recommendation": "Aprovado"
-}
-```
+## Notes
 
-| Probabilidade | Risk Label | Recomendação |
-|---|---|---|
-| < 0.10 | Baixo Risco | Aprovado |
-| 0.10 - 0.30 | Médio Risco | Aprovado com restrições |
-| 0.30 - 0.50 | Alto Risco | Análise manual recomendada |
-| > 0.50 | Crítico | Reprovado |
+The dataset is public (Kaggle) and the target definition follows the original competition. The model architecture is appropriate for the problem class but is not necessarily what I would deploy in production — choices like 4-base-learner stacking are heavier than typical fintech production scoring (usually a single well-tuned LGBM or XGBoost with proper monitoring). Stacking is used here as an exploration of the technique.
 
-### Testes
+## Status
 
-```bash
-pytest tests/ -v
-# 17 testes: limpeza, feature engineering, cálculo de risco
-```
+Study repository. Training and inference both work end-to-end.
 
-## Resultados
+## Author
 
-| Metrica | Valor |
-|---|---|
-| AUC-ROC | ~0.80 |
-| AUC-PR | Varia por threshold |
-| Modelo | Stacking Ensemble (4 base + meta) |
-| Interpretabilidade | SHAP TreeExplainer |
-
-## Licenca
-
-MIT
+Murillo Sezerino — Analytics Engineer · Data Engineer
+[murillosezerino.com](https://murillosezerino.com) · [LinkedIn](https://linkedin.com/in/murillosezerino)
