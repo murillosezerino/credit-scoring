@@ -1,6 +1,12 @@
 """
-preprocess.py — Limpeza, Feature Engineering e balanceamento com SMOTE.
-Dataset: Give Me Some Credit (Kaggle)
+preprocess.py — Limpeza, feature engineering, escala e (opcional) SMOTE.
+Dataset: Give Me Some Credit (Kaggle).
+
+Ordem que importa para a correcao:
+1. split estratificado
+2. ajustar o scaler SO no treino, transformar treino e teste
+3. aplicar SMOTE sobre o treino JA ESCALADO (assim o KNN do SMOTE opera em
+   distancias comparaveis e o scaler nunca e influenciado por dados sinteticos)
 """
 
 import logging
@@ -26,6 +32,13 @@ FEATURES = [
     "NumberOfTime60-89DaysPastDueNotWorse",
     "NumberOfDependents",
 ]
+
+ENGINEERED = ["TotalLatePayments", "IncomePerDependent", "CreditUtilizationRisk"]
+
+
+def feature_columns() -> list:
+    """As 13 colunas de entrada do modelo, na ordem usada em treino e na API."""
+    return FEATURES + ENGINEERED
 
 
 def load_data(path: str) -> pd.DataFrame:
@@ -70,39 +83,41 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def split_and_balance(df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42):
-    logger.info("Separando features e target...")
-
-    feature_cols = FEATURES + ["TotalLatePayments", "IncomePerDependent", "CreditUtilizationRisk"]
-    X = df[feature_cols]
+def split_scale(df: pd.DataFrame, test_size: float = 0.2, random_state: int = 42):
+    """Split estratificado + scaler ajustado apenas no treino (sem SMOTE)."""
+    cols = feature_columns()
+    X = df[cols]
     y = df[TARGET]
 
-    logger.info(f"Distribuicao original — 0: {(y==0).sum():,} | 1: {(y==1).sum():,}")
+    logger.info(f"Distribuicao original — 0: {(y == 0).sum():,} | 1: {(y == 1).sum():,}")
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state, stratify=y
     )
 
-    # SMOTE apenas no treino
-    logger.info("Aplicando SMOTE no conjunto de treino...")
-    smote = SMOTE(random_state=random_state)
-    X_train_bal, y_train_bal = smote.fit_resample(X_train, y_train)
-    logger.info(f"Apos SMOTE — 0: {(y_train_bal==0).sum():,} | 1: {(y_train_bal==1).sum():,}")
-
-    # Normalizar
     scaler = StandardScaler()
-    X_train_bal = pd.DataFrame(
-        scaler.fit_transform(X_train_bal), columns=X_train_bal.columns
+    X_train_s = pd.DataFrame(
+        scaler.fit_transform(X_train), columns=cols, index=X_train.index
     )
-    X_test = pd.DataFrame(
-        scaler.transform(X_test), columns=X_test.columns
+    X_test_s = pd.DataFrame(
+        scaler.transform(X_test), columns=cols, index=X_test.index
     )
 
-    return X_train_bal, X_test, y_train_bal, y_test, scaler
+    return X_train_s, X_test_s, y_train, y_test, scaler
+
+
+def apply_smote(X_train: pd.DataFrame, y_train: pd.Series, random_state: int = 42):
+    """SMOTE aplicado sobre o treino ja escalado. Usado no modelo de estudo."""
+    logger.info("Aplicando SMOTE no conjunto de treino (ja escalado)...")
+    smote = SMOTE(random_state=random_state)
+    X_bal, y_bal = smote.fit_resample(X_train, y_train)
+    logger.info(f"Apos SMOTE — 0: {(y_bal == 0).sum():,} | 1: {(y_bal == 1).sum():,}")
+    return X_bal, y_bal
 
 
 def run(path: str):
-    df = load_data(path)
-    df = clean(df)
-    df = build_features(df)
-    return split_and_balance(df)
+    """Caminho do modelo de estudo: treino escalado e balanceado com SMOTE."""
+    df = build_features(clean(load_data(path)))
+    X_train_s, X_test_s, y_train, y_test, scaler = split_scale(df)
+    X_bal, y_bal = apply_smote(X_train_s, y_train)
+    return X_bal, X_test_s, y_bal, y_test, scaler

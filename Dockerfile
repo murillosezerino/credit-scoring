@@ -6,12 +6,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Codigo (inclui models/ se um modelo treinado for commitado)
+# Codigo (inclui models/serving_model.pkl e scaler.pkl, commitados para o demo)
 COPY . .
 
 ENV PORT=8000
 EXPOSE 8000
 
-# Serve a API. /docs, /health e / funcionam sem modelo;
-# /predict exige models/stacking_model.pkl (gerado por `python main.py`).
+# Serve a API. models/serving_model.pkl e scaler.pkl ja vem no repo,
+# entao /predict funciona out-of-the-box.
 CMD ["sh", "-c", "uvicorn src.api:app --host 0.0.0.0 --port ${PORT}"]

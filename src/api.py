@@ -1,10 +1,10 @@
 """
 api.py — API REST com FastAPI para servir predicoes do modelo de credit scoring.
+Carrega o modelo de serving (LightGBM calibrado) e o scaler.
 """
 
 import logging
 import joblib
-import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -13,17 +13,17 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Credit Scoring API",
-    description="API para predicao de risco de inadimplencia usando Stacking Ensemble",
-    version="1.0.0",
+    description="Predicao de risco de inadimplencia (LightGBM calibrado), servida com FastAPI.",
+    version="1.1.0",
 )
 
-# Carrega modelo e scaler na inicializacao
+# Carrega modelo de serving e scaler na inicializacao
 try:
-    model  = joblib.load("models/stacking_model.pkl")
+    model = joblib.load("models/serving_model.pkl")
     scaler = joblib.load("models/scaler.pkl")
-    logger.info("Modelo carregado com sucesso.")
+    logger.info("Modelo de serving carregado com sucesso.")
 except Exception as e:
-    model  = None
+    model = None
     scaler = None
     logger.warning(f"Modelo nao encontrado: {e}")
 
@@ -51,18 +51,23 @@ class CreditResponse(BaseModel):
 def calculate_risk(proba: float) -> tuple:
     score = int((1 - proba) * 1000)
     if proba < 0.10:
-        return score, "Baixo Risco",    "Aprovado"
+        return score, "Baixo Risco",  "Aprovado"
     elif proba < 0.30:
-        return score, "Medio Risco",   "Aprovado com restricoes"
+        return score, "Medio Risco",  "Aprovado com restricoes"
     elif proba < 0.50:
-        return score, "Alto Risco",    "Analise manual recomendada"
+        return score, "Alto Risco",   "Analise manual recomendada"
     else:
-        return score, "Critico",       "Reprovado"
+        return score, "Critico",      "Reprovado"
 
 
 @app.get("/")
 def root():
-    return {"status": "ok", "model": "Stacking Ensemble Credit Scoring v1.0"}
+    return {
+        "status": "ok",
+        "model": "Credit Scoring API v1.1 (calibrated LightGBM)",
+        "note": "Demo model trained on a synthetic sample; study metrics come from the full Kaggle dataset.",
+        "docs": "/docs",
+    }
 
 
 @app.get("/health")
@@ -72,8 +77,8 @@ def health():
 
 @app.post("/predict", response_model=CreditResponse)
 def predict(request: CreditRequest):
-    if model is None:
-        raise HTTPException(status_code=503, detail="Modelo nao carregado. Treine primeiro.")
+    if model is None or scaler is None:
+        raise HTTPException(status_code=503, detail="Modelo nao carregado. Treine primeiro (python main.py).")
 
     data = pd.DataFrame([{
         "RevolvingUtilizationOfUnsecuredLines":  request.RevolvingUtilizationOfUnsecuredLines,
@@ -81,31 +86,29 @@ def predict(request: CreditRequest):
         "NumberOfTime30-59DaysPastDueNotWorse":  request.NumberOfTime30_59DaysPastDueNotWorse,
         "DebtRatio":                             request.DebtRatio,
         "MonthlyIncome":                         request.MonthlyIncome,
-        "NumberOfOpenCreditLinesAndLoans":        request.NumberOfOpenCreditLinesAndLoans,
+        "NumberOfOpenCreditLinesAndLoans":       request.NumberOfOpenCreditLinesAndLoans,
         "NumberOfTimes90DaysLate":               request.NumberOfTimes90DaysLate,
         "NumberRealEstateLoansOrLines":          request.NumberRealEstateLoansOrLines,
         "NumberOfTime60-89DaysPastDueNotWorse":  request.NumberOfTime60_89DaysPastDueNotWorse,
         "NumberOfDependents":                    request.NumberOfDependents,
     }])
 
-    # Engenharia de features
-    data["TotalLatePayments"]     = (
+    # Engenharia de features (mesma logica do treino)
+    data["TotalLatePayments"] = (
         data["NumberOfTime30-59DaysPastDueNotWorse"]
         + data["NumberOfTime60-89DaysPastDueNotWorse"]
         + data["NumberOfTimes90DaysLate"]
     )
-    data["IncomePerDependent"]    = data["MonthlyIncome"] / (data["NumberOfDependents"] + 1)
+    data["IncomePerDependent"] = data["MonthlyIncome"] / (data["NumberOfDependents"] + 1)
     data["CreditUtilizationRisk"] = data["RevolvingUtilizationOfUnsecuredLines"] * data["DebtRatio"]
 
-    data_scaled = pd.DataFrame(
-        scaler.transform(data), columns=data.columns
-    )
+    data_scaled = pd.DataFrame(scaler.transform(data), columns=data.columns)
 
-    proba = model.predict_proba(data_scaled)[0][1]
+    proba = float(model.predict_proba(data_scaled)[0][1])
     score, label, recommendation = calculate_risk(proba)
 
     return CreditResponse(
-        default_probability=round(float(proba), 4),
+        default_probability=round(proba, 4),
         risk_score=score,
         risk_label=label,
         recommendation=recommendation,

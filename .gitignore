@@ -6,9 +6,13 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Dados e modelos (muito grandes para o GitHub)
-data/
-models/
+# Dados e modelos grandes; mantemos apenas o sample e o modelo de serving do demo
+data/*
+!data/sample/
+!data/sample/**
+models/*
+!models/serving_model.pkl
+!models/scaler.pkl
 catboost_info/
 
 # Credenciais
