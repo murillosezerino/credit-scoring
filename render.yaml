@@ -1,0 +1,9 @@
+# Deploy em 1 clique no Render (https://render.com) usando Docker.
+# New > Blueprint > aponte para este repo. Free tier.
+services:
+  - type: web
+    name: credit-scoring-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true

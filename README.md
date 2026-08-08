@@ -1,5 +1,9 @@
 # Credit Scoring — Stacking Ensemble
 
+[![CI](https://github.com/murillosezerino/credit-scoring/actions/workflows/ci.yml/badge.svg)](https://github.com/murillosezerino/credit-scoring/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![FastAPI](https://img.shields.io/badge/API-FastAPI-009485)
+
 > Technical study: default prediction model using a Stacking Ensemble of gradient boosting algorithms, served through a FastAPI endpoint.
 
 A focused exercise in applied machine learning for credit risk — a domain familiar from prior experience at PagBank, Porto Vale Consórcios and CooperJohnson. The project explores ensemble methods (XGBoost + LightGBM + CatBoost + Random Forest) with a Logistic Regression meta-learner, on a public Kaggle dataset.
@@ -44,30 +48,60 @@ raw data → preprocessing → SMOTE → feature engineering
 ```
 credit-scoring/
 ├── src/
-│   ├── preprocessing/    # Data cleaning, SMOTE, splits
-│   ├── features/         # Feature engineering
-│   ├── models/           # Base + meta learners
-│   ├── explain/          # SHAP analysis
-│   └── api/              # FastAPI inference endpoint
-├── tests/
-└── main.py
+│   ├── preprocess.py    # Cleaning, SMOTE, feature engineering, splits
+│   ├── train.py         # Base learners + meta-learner, model persistence
+│   ├── evaluate.py      # Metrics, ROC curve, SHAP explanations
+│   └── api.py           # FastAPI inference endpoint (/predict, /health)
+├── tests/               # test_preprocess.py, test_api.py
+├── main.py              # Pipeline: preprocess -> train -> evaluate -> save
+└── Dockerfile           # Container for the API
 ```
 
 ## How to run
 
 ```bash
 pip install -r requirements.txt
-python main.py train          # Train the stack
-python main.py serve          # Run FastAPI on :8000
+python main.py                                  # train + evaluate + save model
+uvicorn src.api:app --host 0.0.0.0 --port 8000  # serve the API
 ```
 
-Inference example:
+Open the interactive docs at `http://localhost:8000/docs` (Swagger UI).
+
+Inference example (10 features from the Kaggle "Give Me Some Credit" dataset):
 
 ```bash
 curl -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
-  -d '{"income": 5000, "age": 35, "credit_utilization": 0.4, ...}'
+  -d '{
+    "RevolvingUtilizationOfUnsecuredLines": 0.45,
+    "age": 35,
+    "NumberOfTime30_59DaysPastDueNotWorse": 0,
+    "DebtRatio": 0.32,
+    "MonthlyIncome": 5000,
+    "NumberOfOpenCreditLinesAndLoans": 6,
+    "NumberOfTimes90DaysLate": 0,
+    "NumberRealEstateLoansOrLines": 1,
+    "NumberOfTime60_89DaysPastDueNotWorse": 0,
+    "NumberOfDependents": 1
+  }'
 ```
+
+Response:
+
+```json
+{ "default_probability": 0.08, "risk_score": 920, "risk_label": "Baixo Risco", "recommendation": "Aprovado" }
+```
+
+## Deploy (live demo)
+
+The API is containerized. To publish a live demo:
+
+```bash
+docker build -t credit-scoring-api .
+docker run -p 8000:8000 credit-scoring-api      # Swagger at /docs
+```
+
+One-click deploy on [Render](https://render.com) via the included `render.yaml` (free tier, Docker runtime). The `/`, `/health` and `/docs` routes work immediately; for a live `/predict`, commit a trained `models/stacking_model.pkl` (produced by `python main.py`) so the container ships with the model.
 
 ## Notes
 
@@ -79,5 +113,5 @@ Study repository. Training and inference both work end-to-end.
 
 ## Author
 
-Murillo Sezerino — Analytics Engineer · Data Engineer
+Murillo Sezerino — Data Engineer & Analytics
 [murillosezerino.com](https://murillosezerino.com) · [LinkedIn](https://linkedin.com/in/murillosezerino)
