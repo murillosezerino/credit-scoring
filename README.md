@@ -131,5 +131,5 @@ Study repository. Preprocessing, training, serving and the API all run end to en
 
 ## Author
 
-Murillo Sezerino, Data Engineer
+Murillo Sezerino — Software Engineer · Full Stack
 [murillosezerino.com](https://murillosezerino.com) - [LinkedIn](https://linkedin.com/in/murillosezerino)
